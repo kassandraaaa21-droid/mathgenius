@@ -71,11 +71,32 @@
     {id:'h5',difficulty:'Hard',topic:TOPICS[5],prompt:'Evaluate ∫₀² 3x² dx.',choices:['4','6','8','12'],answer:2,explanation:'An antiderivative is x³. Evaluate 2³ − 0³ = 8.'}
   ];
 
-  const STORE_KEY = 'mathGenius.progress.v1';
+  const LEGACY_STORE_KEY = 'mathGenius.progress.v1';
+  const PROFILE_KEY = 'mathGenius.profile.v1';
+  const LEARNERS_KEY = 'mathGenius.learners.v1';
+  function normalizeNickname(value) { return String(value || '').normalize('NFKC').trim().replace(/\s+/g,' '); }
+  function nicknameKey(value) { return normalizeNickname(value).toLocaleLowerCase(); }
+  function progressKey(value) { return `${LEGACY_STORE_KEY}:${encodeURIComponent(nicknameKey(value))}`; }
+  function loadProfile() { try { const saved=JSON.parse(localStorage.getItem(PROFILE_KEY)||'null'); return saved&&typeof saved.nickname==='string'&&normalizeNickname(saved.nickname)?{nickname:normalizeNickname(saved.nickname)}:null; } catch { return null; } }
+  let profile = loadProfile();
+  let hasEverProfile = Boolean(profile);
+  let STORE_KEY = profile ? progressKey(profile.nickname) : LEGACY_STORE_KEY;
   const freshData = () => ({ xp:0, completed:[], quizScores:[], streak:0, lastActive:'', challengeDate:'', speedBest:0, speedRuns:0, equationSolved:0 });
   let data = loadData();
   function loadData() { try { const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); return saved && typeof saved === 'object' ? { ...freshData(), ...saved, completed:Array.isArray(saved.completed)?saved.completed:[], quizScores:Array.isArray(saved.quizScores)?saved.quizScores:[] } : freshData(); } catch { return freshData(); } }
-  function saveData() { localStorage.setItem(STORE_KEY, JSON.stringify(data)); updateXP(); }
+  function saveData() { localStorage.setItem(STORE_KEY, JSON.stringify(data)); updateXP(); refreshLeaderboards(); }
+  function loadLearners() { try { const value=JSON.parse(localStorage.getItem(LEARNERS_KEY)||'[]'); return Array.isArray(value)?value.filter(item=>typeof item==='string'&&normalizeNickname(item)):[]; } catch { return []; } }
+  function registerLearner(nickname) { const learners=loadLearners(); if(!learners.some(item=>nicknameKey(item)===nicknameKey(nickname))){learners.push(normalizeNickname(nickname));localStorage.setItem(LEARNERS_KEY,JSON.stringify(learners));} }
+  function getLeaderboard() {
+    return loadLearners().map(nickname=>{let saved=null;try{saved=JSON.parse(localStorage.getItem(progressKey(nickname))||'null');}catch{}const xp=Number(saved?.xp)||0;return {nickname,xp:Number.isFinite(xp)?Math.max(0,Math.floor(xp)):0,current:Boolean(profile&&nicknameKey(profile.nickname)===nicknameKey(nickname))};})
+      .sort((a,b)=>b.xp-a.xp||a.nickname.localeCompare(b.nickname,undefined,{sensitivity:'base'})).slice(0,5);
+  }
+  function leaderboardContents() {
+    const rows=getLeaderboard();
+    return `<div class="leaderboard-heading"><div><p class="leaderboard-eyebrow">LIVE XP RANKING</p><h2>Top learners</h2><p class="leaderboard-caption">Local leaderboard · this browser only</p></div><span class="leaderboard-live">${icon('radio','w-3.5 h-3.5')} LIVE</span></div>${rows.length?`<ol class="leaderboard-list">${rows.map((learner,index)=>`<li class="leaderboard-row ${learner.current?'is-current':''}"><span class="leaderboard-rank rank-${index+1}">${String(index+1).padStart(2,'0')}</span><span class="leaderboard-avatar">${esc(learner.nickname.trim().slice(0,2).toUpperCase())}</span><span class="leaderboard-name">${esc(learner.nickname)}${learner.current?'<small>You</small>':''}</span><strong class="leaderboard-xp">${learner.xp.toLocaleString()} <small>XP</small></strong></li>`).join('')}</ol>`:`<div class="leaderboard-empty"><span>${icon('sparkles','w-5 h-5')}</span><p>No learners yet</p><small>Choose a nickname and earn XP to start this board.</small></div>`}<p class="leaderboard-footnote">This board only includes profiles saved in this browser. It does not sync between devices.</p>`;
+  }
+  function leaderboardCard(extraClass='') { return `<section class="surface leaderboard-card ${extraClass}" data-leaderboard>${leaderboardContents()}</section>`; }
+  function refreshLeaderboards() { document.querySelectorAll('[data-leaderboard]').forEach(board=>board.innerHTML=leaderboardContents()); refreshIcons(); }
   function todayKey() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
   function recordActivity() { const today=todayKey(); if (data.lastActive !== today) { const prev = new Date(); prev.setDate(prev.getDate()-1); const yesterday=`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-${String(prev.getDate()).padStart(2,'0')}`; data.streak = data.lastActive === yesterday ? data.streak + 1 : 1; data.lastActive=today; } }
   function awardXP(amount) { if (!Number.isFinite(amount) || amount <= 0) return; data.xp += Math.round(amount); recordActivity(); saveData(); }
@@ -106,7 +127,7 @@
   function refreshIcons() { if (window.lucide?.createIcons) lucide.createIcons(); }
 
   const nav = [ ['home','Home','house'],['lessons','Lessons','book-open'],['quiz','Quiz Arena','swords'],['tools','Math Tools','calculator'],['games','Games Arcade','gamepad-2'],['dashboard','Dashboard','layout-dashboard'],['about','About','sparkles'],['contact','Contact','mail'] ];
-  const ui = { view:'home', lessonSearch:'', lessonTopic:'All topics', lessonId:null, quizTopic:'All topics', quizDifficulty:'Easy', quiz:null, calcExpr:'', calcResult:'', angleMode:'RAD', speed:null, speedTimer:null, guess:null, equationGame:null };
+  const ui = { view:'home', authScreen:'landing', nicknameDraft:'', mobileMoreOpen:false, lessonSearch:'', lessonTopic:'All topics', lessonId:null, quizTopic:'All topics', quizDifficulty:'Easy', quiz:null, calcExpr:'', calcResult:'', angleMode:'RAD', speed:null, speedTimer:null, guess:null, equationGame:null };
 
   document.getElementById('app').innerHTML = `
     <div class="app-shell flex">
@@ -116,27 +137,68 @@
         <nav class="grid gap-1" id="side-nav"></nav>
         <div class="mt-auto p-4 rounded-2xl bg-gradient-to-br from-violet-50 to-sky-50 border border-violet-100"><div class="flex items-center gap-2 text-violet-800 font-semibold text-sm">${icon('sparkles','w-4 h-4')} Keep it curious</div><p class="text-xs leading-relaxed text-slate-500 mt-2">Small daily practice builds lasting confidence.</p><button class="text-xs font-semibold text-violet-700 mt-3" data-view="games">Take a quick break →</button></div>
       </aside>
-      <div class="main-column min-h-screen">
+      <div class="main-column min-h-screen flex flex-col">
         <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-100 px-4 sm:px-7 lg:px-10 h-[76px] flex items-center justify-between gap-4">
           <div class="flex items-center gap-3 min-w-0"><button class="lg:hidden grid place-items-center w-10 h-10 rounded-xl bg-violet-50 text-violet-800" data-view="home" aria-label="Home">${icon('infinity')}</button><div><p class="text-[10px] uppercase tracking-[.15em] text-slate-400 font-semibold hidden sm:block">Your learning space</p><h1 id="page-title" class="text-sm sm:text-base font-bold text-slate-800 truncate">Welcome back</h1></div></div>
-          <div class="flex items-center gap-3 sm:gap-4"><label class="hidden sm:flex items-center gap-2 px-3 h-10 rounded-xl bg-slate-50 border border-slate-100 w-48 md:w-64 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">${icon('search','w-4 h-4 text-slate-400')}<input id="global-search" class="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="Search lessons..." aria-label="Search lessons"></label><div class="flex items-center gap-2 px-3 h-10 rounded-full bg-amber-50 border border-amber-100 text-amber-700 font-bold text-sm">${icon('zap','w-4 h-4 fill-amber-400')}<span id="xp-pill">0 XP</span></div><button data-view="dashboard" class="grid place-items-center w-10 h-10 rounded-full bg-violet-100 text-violet-800 font-bold text-sm" aria-label="Open dashboard">MG</button></div>
+          <div class="flex items-center gap-2 sm:gap-4"><label class="hidden sm:flex items-center gap-2 px-3 h-10 rounded-xl bg-slate-50 border border-slate-100 w-48 md:w-64 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">${icon('search','w-4 h-4 text-slate-400')}<input id="global-search" class="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="Search lessons..." aria-label="Search lessons"></label><div class="flex items-center gap-2 px-3 h-10 rounded-full bg-amber-50 border border-amber-100 text-amber-700 font-bold text-sm">${icon('zap','w-4 h-4 fill-amber-400')}<span id="xp-pill">0 XP</span></div><span id="learner-name" class="hidden md:block max-w-32 truncate text-sm font-semibold text-slate-600"></span><button id="learner-avatar" data-action="switch-learner" class="grid place-items-center w-10 h-10 rounded-full bg-violet-100 text-violet-800 font-bold text-sm" aria-label="Switch learner" title="Switch learner">MG</button></div>
         </header>
-        <main id="view-content" class="px-4 sm:px-7 lg:px-10 py-7 sm:py-9 pb-28 lg:pb-10 max-w-[1500px] mx-auto"></main>
+        <main id="view-content" class="flex-1 w-full px-4 sm:px-7 lg:px-10 py-7 sm:py-9 pb-28 lg:pb-10 max-w-[1500px] mx-auto"></main>
+        <footer class="app-footer">© 2026 Kassandra.dev</footer>
       </div>
     </div>
-    <nav id="mobile-nav" class="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-xl border-t border-slate-200 px-2 py-2 flex items-center justify-around"></nav>`;
+    <nav id="mobile-nav" aria-label="Main navigation" class="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-xl border-t border-slate-200 px-2 py-2 flex items-center justify-around"></nav>
+    <div id="mobile-more-menu" class="mobile-more-menu hidden" role="menu" aria-label="More pages"></div>
+    <section id="welcome-screen" class="auth-screen hidden" aria-live="polite"></section>`;
 
   const sideNav=document.getElementById('side-nav'), mobileNav=document.getElementById('mobile-nav');
   sideNav.innerHTML=nav.map(([id,label,ico])=>`<button class="nav-link" data-view="${id}">${icon(ico)}<span>${label}</span>${id==='quiz'?'<span class="ml-auto rounded-full bg-violet-100 text-violet-700 text-[10px] px-2 py-0.5">15</span>':''}</button>`).join('');
-  mobileNav.innerHTML=nav.map(([id,label,ico])=>`<button class="mobile-link" data-view="${id}">${icon(ico)}<span>${label==='Quiz Arena'?'Quiz':label==='Math Tools'?'Tools':label==='Games Arcade'?'Games':label}</span></button>`).join('');
+  const mobilePrimary = [['home','Home','house'],['lessons','Learn','book-open'],['quiz','Quiz','swords'],['games','Play','gamepad-2'],['dashboard','Progress','layout-dashboard']];
+  mobileNav.innerHTML=mobilePrimary.map(([id,label,ico])=>`<button class="mobile-link" data-view="${id}" aria-label="${label}">${icon(ico)}<span>${label}</span></button>`).join('')+`<button class="mobile-link" data-action="toggle-more" aria-label="More pages" aria-expanded="false">${icon('ellipsis')}<span>More</span></button>`;
+  document.getElementById('mobile-more-menu').innerHTML=nav.filter(([id])=>!mobilePrimary.some(([mainId])=>mainId===id)).map(([id,label,ico])=>`<button class="more-link" role="menuitem" data-view="${id}">${icon(ico)}<span>${label}</span>${icon('arrow-up-right','more-arrow')}</button>`).join('');
+  if(profile) registerLearner(profile.nickname);
 
   function updateXP() { const pill=document.getElementById('xp-pill'); if(pill) pill.textContent=`${data.xp} XP`; }
-  function go(view) { ui.view=view; ui.lessonId=null; render(); window.scrollTo({top:0,behavior:'smooth'}); }
-  function render() { const title=nav.find(n=>n[0]===ui.view)?.[1]||'Math Genius'; document.getElementById('page-title').textContent=title; document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===ui.view)); renderView(); updateXP(); refreshIcons(); }
+  function updateProfileUI() {
+    const name=document.getElementById('learner-name'), avatar=document.getElementById('learner-avatar');
+    if(name)name.textContent=profile?.nickname||'';
+    if(avatar){const parts=(profile?.nickname||'MG').trim().split(/\s+/);avatar.textContent=parts.length>1?`${parts[0][0]}${parts[1][0]}`:parts[0].slice(0,2);avatar.setAttribute('aria-label',`Switch learner from ${profile?.nickname||'current profile'}`);}
+  }
+  function renderAuth() {
+    const target=document.getElementById('welcome-screen');
+    if(ui.authScreen==='login'){
+      target.innerHTML=`<div class="auth-login-wrap"><button class="auth-back" data-action="show-landing">${icon('arrow-left','w-4 h-4')} Back</button><div class="auth-login-card"><div class="auth-mark">${icon('infinity','w-7 h-7')}</div><p class="auth-eyebrow">YOUR LEARNING SPACE</p><h1>Welcome back,<br>future genius.</h1><p class="auth-copy">Enter your nickname to open your math journey.</p><form id="nickname-form" class="auth-form"><label for="nickname-input">Your nickname</label><input id="nickname-input" class="field" name="nickname" type="text" value="${esc(ui.nicknameDraft)}" placeholder="e.g. Alex" autocomplete="nickname" autocapitalize="words" minlength="2" maxlength="24" required><p class="auth-hint">Use the same nickname to pick up where you left off on this device.</p><button class="btn-primary auth-submit" type="submit">Continue ${icon('arrow-right','w-4 h-4')}</button></form><p class="auth-switch">New here? Choose any nickname to get started.</p></div><p class="auth-footnote">Nickname only. No password needed.</p></div>`;
+      target.querySelector('.auth-submit')?.insertAdjacentHTML('beforebegin',`<div class="auth-privacy-note">${icon('shield-check','w-4 h-4')}<p><strong>No database or password sign-in.</strong> Your nickname and progress stay in this browser; they are not saved to a server.</p></div>`);
+      target.querySelector('.auth-login-wrap')?.insertAdjacentHTML('beforeend','<footer class="auth-footer auth-login-footer"><span>© 2026 Kassandra.dev</span></footer>');
+      refreshIcons();setTimeout(()=>document.getElementById('nickname-input')?.focus(),0);return;
+    }
+    target.innerHTML=`<div class="auth-landing"><header class="auth-topbar"><a href="#top" class="auth-brand" aria-label="Math Genius home"><span class="auth-mark">${icon('infinity','w-6 h-6')}</span><span><strong>Math Genius</strong><small>Learn. Practice. Master.</small></span></a><button class="auth-signin" data-action="show-login">Sign in ${icon('arrow-up-right','w-4 h-4')}</button></header><main id="top"><section class="auth-hero"><div class="auth-hero-copy"><p class="auth-eyebrow"><span class="auth-spark">${icon('sparkles','w-4 h-4')}</span> YOUR MATH ADVENTURE STARTS HERE</p><h1>Math skills,<br><span>leveled up.</span></h1><p class="auth-lead">Build confidence one small win at a time. Learn the idea, take on a challenge, and watch your progress grow.</p><div class="auth-actions"><button class="btn-primary auth-cta" data-action="show-login">Start learning ${icon('arrow-right','w-4 h-4')}</button><span class="auth-note">Free to start · Nickname only</span></div><div class="auth-social-proof"><div class="auth-face-stack"><span>A</span><span>∑</span><span>π</span></div><p><strong>Short lessons. Real progress.</strong><br>Practice at your own pace.</p></div></div><div class="auth-preview"><div class="auth-preview-glow"></div><div class="auth-preview-card"><div class="auth-preview-head"><span class="auth-preview-icon">${icon('trophy','w-5 h-5')}</span><span class="auth-level">LEVEL 1 · CURIOUS</span></div><p class="auth-preview-title">Your next win</p><p class="auth-preview-sub">Every solved problem moves you forward.</p><div class="auth-xp-row"><span>${icon('zap','w-4 h-4')} XP progress</span><strong>0 / 100</strong></div><div class="progress-track"><div class="progress-fill" style="width:8%"></div></div><div class="auth-preview-stats"><div><span>${icon('book-open','w-4 h-4')}</span><strong>12</strong><small>guided lessons</small></div><div><span>${icon('gamepad-2','w-4 h-4')}</span><strong>3</strong><small>math games</small></div><div><span>${icon('flame','w-4 h-4')}</span><strong>∞</strong><small>ways to grow</small></div></div></div><div class="auth-floating auth-floating-top">${icon('circle-check','w-4 h-4')} One step at a time</div><div class="auth-floating auth-floating-bottom">+20 XP <span>Nice work!</span></div></div></section><section class="auth-features"><div><span>${icon('book-open','w-5 h-5')}</span><h2>Learn clearly</h2><p>Friendly explanations and worked examples make tricky ideas easier to follow.</p></div><div><span>${icon('gamepad-2','w-5 h-5')}</span><h2>Play to practice</h2><p>Quick quizzes and mini games turn practice into a daily streak.</p></div><div><span>${icon('chart-no-axes-column-increasing','w-5 h-5')}</span><h2>See your growth</h2><p>Earn XP, unlock badges, and pick up right where you left off.</p></div></section></main><footer class="auth-footer"><span>Math Genius</span><span>Your progress stays on this device and follows your nickname.</span></footer></div>`;
+    target.querySelector('.auth-features')?.insertAdjacentHTML('afterend',leaderboardCard('auth-leaderboard'));
+    const footer=target.querySelector('.auth-footer');if(footer)footer.innerHTML='<span>© 2026 Kassandra.dev</span>';
+    refreshIcons();
+  }
+  function signInWithNickname(raw) {
+    const nickname=normalizeNickname(raw);
+    if(nickname.length<2||nickname.length>24){showToast('Choose a nickname between 2 and 24 characters.','error');return;}
+    if(!/[\p{L}\p{N}]/u.test(nickname)){showToast('Your nickname needs at least one letter or number.','error');return;}
+    const nextKey=progressKey(nickname), existing=localStorage.getItem(nextKey);
+    profile={nickname};STORE_KEY=nextKey;registerLearner(nickname);
+    if(existing){data=loadData();}
+    else if(!hasEverProfile&&localStorage.getItem(LEGACY_STORE_KEY)){data={...data};}
+    else{data=freshData();}
+    localStorage.setItem(PROFILE_KEY,JSON.stringify(profile));hasEverProfile=true;saveData();ui.authScreen='landing';ui.view='home';render();
+  }
+  function go(view) { ui.view=view; ui.lessonId=null; ui.mobileMoreOpen=false; document.getElementById('mobile-more-menu')?.classList.add('hidden'); render(); window.scrollTo({top:0,behavior:'smooth'}); }
+  function render() {
+    const shell=document.querySelector('.app-shell'), welcome=document.getElementById('welcome-screen'), mobileNav=document.getElementById('mobile-nav');
+    if(!profile){shell?.classList.add('hidden');mobileNav?.classList.add('hidden');welcome?.classList.remove('hidden');renderAuth();return;}
+    welcome?.classList.add('hidden');shell?.classList.remove('hidden');mobileNav?.classList.remove('hidden');
+    const title=nav.find(n=>n[0]===ui.view)?.[1]||'Math Genius'; document.getElementById('page-title').textContent=title; document.querySelectorAll('[data-view]').forEach(el=>{el.classList.toggle('active',el.dataset.view===ui.view);if(el.closest('#mobile-nav')||el.closest('#mobile-more-menu')){if(el.dataset.view===ui.view)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');}}); updateProfileUI(); renderView(); updateXP(); refreshIcons();
+  }
   function renderView() {
     const target=document.getElementById('view-content');
     const renderers={home:renderHome,lessons:renderLessons,quiz:renderQuiz,tools:renderTools,games:renderGames,dashboard:renderDashboard,about:renderAbout,contact:renderContact};
     target.innerHTML=(renderers[ui.view]||renderHome)();
+    if(ui.view==='dashboard'){const stats=target.children[1];if(stats)stats.insertAdjacentHTML('afterend',leaderboardCard('dashboard-leaderboard mt-5'));}
     if(ui.view==='tools') target.querySelector('.k-key')?.parentElement?.insertAdjacentHTML('beforeend','<button class="k-key op" data-calc="log10(">log₁₀</button><button class="k-key op" data-calc="log(">ln</button><button class="k-key op" data-calc="^">xʸ</button><button class="k-key op" data-calc="pi">π</button>');
     renderMath(target); refreshIcons();
   }
@@ -265,6 +327,7 @@
   }
 
   document.addEventListener('click',event=>{
+    if(ui.mobileMoreOpen&&!event.target.closest('#mobile-more-menu')&&!event.target.closest('[data-action="toggle-more"]')){ui.mobileMoreOpen=false;document.getElementById('mobile-more-menu')?.classList.add('hidden');document.querySelector('[data-action="toggle-more"]')?.setAttribute('aria-expanded','false');}
     const viewButton=event.target.closest('[data-view]'); if(viewButton){go(viewButton.dataset.view);return;}
     const lessonButton=event.target.closest('[data-lesson]'); if(lessonButton){ui.view='lessons';ui.lessonId=lessonButton.dataset.lesson;render();window.scrollTo({top:0,behavior:'smooth'});return;}
     const topic=event.target.closest('[data-topic]'); if(topic){ui.lessonTopic=topic.dataset.topic;ui.lessonId=null;renderView();return;}
@@ -272,6 +335,10 @@
     if(answer&&ui.quiz?.started&&ui.quiz.selected===null){const q=ui.quiz.questions[ui.quiz.index];ui.quiz.selected=Number(answer.dataset.answer);if(ui.quiz.selected===q.answer)ui.quiz.correct++;renderView();return;}
     const calc=event.target.closest('[data-calc]'); if(calc){const key=calc.dataset.calc;if(key==='equals'){calculate();return;}if(key==='clear'){ui.calcExpr='';ui.calcResult='';renderView();return;}if(key==='backspace'){ui.calcExpr=ui.calcExpr.slice(0,-1);}else if(key==='sqrt('){ui.calcExpr+='sqrt(';}else if(key==='^2'){ui.calcExpr+='^2';}else if(['sin','cos','tan'].includes(key)){ui.calcExpr+=`${key}(`;}else{ui.calcExpr+=key;}const ex=document.getElementById('calc-expression');if(ex)ex.textContent=ui.calcExpr||'0';return;}
     const action=event.target.closest('[data-action]')?.dataset.action; if(!action)return;
+    if(action==='show-login'){ui.authScreen='login';render();return;}
+    if(action==='show-landing'){ui.authScreen='landing';render();return;}
+    if(action==='toggle-more'){ui.mobileMoreOpen=!ui.mobileMoreOpen;const menu=document.getElementById('mobile-more-menu');menu?.classList.toggle('hidden',!ui.mobileMoreOpen);event.target.closest('[data-action="toggle-more"]')?.setAttribute('aria-expanded',String(ui.mobileMoreOpen));refreshIcons();return;}
+    if(action==='switch-learner'){localStorage.removeItem(PROFILE_KEY);profile=null;ui.authScreen='login';ui.nicknameDraft='';render();return;}
     if(action==='back-lessons'){ui.lessonId=null;renderView();return;}
     if(action==='clear-search'){ui.lessonSearch='';ui.lessonTopic='All topics';renderView();return;}
     if(action==='complete-lesson'){const id=event.target.closest('[data-id]')?.dataset.id;if(id&&!data.completed.includes(id)){data.completed.push(id);awardXP(20);showToast('Lesson completed — 20 XP added!');renderView();}return;}
@@ -288,6 +355,7 @@
   });
   document.addEventListener('submit',event=>{
     const form=event.target;event.preventDefault();
+    if(form.id==='nickname-form'){ui.nicknameDraft=document.getElementById('nickname-input')?.value||'';signInWithNickname(ui.nicknameDraft);return;}
     if(form.id==='challenge-form'){const challenge=dailyChallenge(),value=Number(document.getElementById('challenge-answer').value);if(Number.isFinite(value)&&Math.abs(value-Number(challenge.answer))<1e-8){data.challengeDate=todayKey();awardXP(50);showToast('Daily challenge solved! +50 XP');renderView();}else showToast('Not quite — try again using the hint.','error');return;}
     if(form.id==='speed-form'&&ui.speed?.running){const value=Number(document.getElementById('speed-answer').value);if(value===ui.speed.question.answer){ui.speed.combo++;ui.speed.score+=10*Math.max(1,Math.floor(ui.speed.combo/3)+1);}else ui.speed.combo=0;ui.speed.question=genArithmetic();const score=document.getElementById('speed-score'),combo=document.getElementById('speed-combo'),question=document.getElementById('speed-question'),input=document.getElementById('speed-answer');if(score)score.textContent=ui.speed.score;if(combo)combo.textContent=`${ui.speed.combo}×`;if(question)question.textContent=ui.speed.question.text;if(input){input.value='';input.focus();}return;}
     if(form.id==='guess-form'&&ui.guess&&!ui.guess.won){const g=ui.guess,value=Number(document.getElementById('guess-input').value);if(!Number.isInteger(value)||value<g.low||value>g.high){showToast(`Choose a whole number from ${g.low} to ${g.high}.`,'error');return;}g.tries++;if(value===g.secret){g.won=true;g.message=`You found ${g.secret}!`;g.earned=Math.max(5,70-(g.tries-1)*8);awardXP(g.earned);showToast(`Number found! +${g.earned} XP`);}else if(value<g.secret){g.low=Math.max(g.low,value+1);g.message='Higher! The number is greater than your guess.';}else{g.high=Math.min(g.high,value-1);g.message='Lower! The number is less than your guess.';}renderView();if(!g.won)document.getElementById('guess-input')?.focus();return;}
@@ -308,6 +376,7 @@
     if(['percent-x','percent-y','percent-a','percent-b'].includes(target.id)){setPercentResults();return;}
   });
   document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&ui.mobileMoreOpen){ui.mobileMoreOpen=false;document.getElementById('mobile-more-menu')?.classList.add('hidden');document.querySelector('[data-action="toggle-more"]')?.setAttribute('aria-expanded','false');}
     if(event.target.closest('#global-search')&&event.key==='Enter'){ui.lessonSearch=event.target.value;ui.view='lessons';ui.lessonId=null;updateActiveNav();renderView();document.getElementById('lesson-search')?.focus();}
     if(ui.view==='tools'&&!['INPUT','TEXTAREA','SELECT','BUTTON'].includes(event.target.tagName)){
       if(/^[0-9.+\-*/^()]$/.test(event.key)){event.preventDefault();ui.calcExpr+=event.key;const expression=document.getElementById('calc-expression');if(expression)expression.textContent=ui.calcExpr;}
@@ -316,6 +385,12 @@
       else if(event.key==='Escape'){ui.calcExpr='';ui.calcResult='';const expression=document.getElementById('calc-expression'),result=document.getElementById('calc-result');if(expression)expression.textContent='0';if(result)result.textContent='';}
     }
     if(event.target.closest('[data-lesson]')&&['Enter',' '].includes(event.key)){event.preventDefault();event.target.closest('[data-lesson]').click();}
+  });
+  window.addEventListener('storage',event=>{
+    if(event.key===LEARNERS_KEY||event.key?.startsWith(`${LEGACY_STORE_KEY}:`)){
+      if(profile&&event.key===STORE_KEY){data=loadData();render();return;}
+      refreshLeaderboards();
+    }
   });
   render();
 })();
