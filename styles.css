@@ -175,6 +175,16 @@ button { -webkit-tap-highlight-color: transparent; }
 .more-link:hover,.more-link.active { color:#5b21b6; background:#f5f3ff; }
 .more-link svg { width:18px; height:18px; }
 .more-link .more-arrow { width:14px; height:14px; margin-left:auto; color:#a78bfa; }
+#three-background { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; opacity:.58; }
+#three-background::before,#three-background::after { content:""; position:absolute; display:block; border:1px solid rgba(139,92,246,.08); border-radius:50%; }
+#three-background::before { width:min(76vw,920px); aspect-ratio:1; left:50%; top:48%; transform:translate(-50%,-50%); }
+#three-background::after { width:min(54vw,650px); aspect-ratio:1; left:50%; top:48%; transform:translate(-50%,-50%); border-color:rgba(56,189,248,.07); }
+.three-background-canvas { position:absolute; inset:0; display:block; width:100%; height:100%; }
+.three-background-fallback { background:radial-gradient(circle at 15% 18%,rgba(167,139,250,.09),transparent 25%),radial-gradient(circle at 83% 76%,rgba(56,189,248,.08),transparent 23%); }
+#app { position:relative; z-index:1; }
+.auth-screen { background:rgba(251,250,255,.8); }
+.logout-button { min-height:40px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid #fee2e2; border-radius:12px; background:#fff7f7; color:#b91c1c; font-size:12px; font-weight:700; white-space:nowrap; transition:background .2s,border-color .2s; }
+.logout-button:hover { border-color:#fecaca; background:#fef2f2; }
 @media(max-width:767px) {
   .auth-landing { padding:0 20px; }
   .auth-topbar { height:72px; }
@@ -202,4 +212,11 @@ button { -webkit-tap-highlight-color: transparent; }
   .auth-preview-stats small { font-size:8px; }
   .auth-login-wrap { padding:20px; }
   .auth-login-card { padding:26px 22px; }
+}
+@media(max-width:639px) {
+  .logout-button { width:38px; min-height:38px; padding:0; border:0; border-radius:50%; background:#fff1f2; }
+  .logout-button span { display:none; }
+}
+@media(prefers-reduced-motion:reduce) {
+  #three-background canvas { animation:none; }
 }

@@ -140,7 +140,7 @@
       <div class="main-column min-h-screen flex flex-col">
         <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-100 px-4 sm:px-7 lg:px-10 h-[76px] flex items-center justify-between gap-4">
           <div class="flex items-center gap-3 min-w-0"><button class="lg:hidden grid place-items-center w-10 h-10 rounded-xl bg-violet-50 text-violet-800" data-view="home" aria-label="Home">${icon('infinity')}</button><div><p class="text-[10px] uppercase tracking-[.15em] text-slate-400 font-semibold hidden sm:block">Your learning space</p><h1 id="page-title" class="text-sm sm:text-base font-bold text-slate-800 truncate">Welcome back</h1></div></div>
-          <div class="flex items-center gap-2 sm:gap-4"><label class="hidden sm:flex items-center gap-2 px-3 h-10 rounded-xl bg-slate-50 border border-slate-100 w-48 md:w-64 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">${icon('search','w-4 h-4 text-slate-400')}<input id="global-search" class="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="Search lessons..." aria-label="Search lessons"></label><div class="flex items-center gap-2 px-3 h-10 rounded-full bg-amber-50 border border-amber-100 text-amber-700 font-bold text-sm">${icon('zap','w-4 h-4 fill-amber-400')}<span id="xp-pill">0 XP</span></div><span id="learner-name" class="hidden md:block max-w-32 truncate text-sm font-semibold text-slate-600"></span><button id="learner-avatar" data-action="switch-learner" class="grid place-items-center w-10 h-10 rounded-full bg-violet-100 text-violet-800 font-bold text-sm" aria-label="Switch learner" title="Switch learner">MG</button></div>
+          <div class="flex items-center gap-2 sm:gap-4"><label class="hidden sm:flex items-center gap-2 px-3 h-10 rounded-xl bg-slate-50 border border-slate-100 w-48 md:w-64 focus-within:border-violet-300 focus-within:ring-2 focus-within:ring-violet-100">${icon('search','w-4 h-4 text-slate-400')}<input id="global-search" class="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="Search lessons..." aria-label="Search lessons"></label><div class="flex items-center gap-2 px-3 h-10 rounded-full bg-amber-50 border border-amber-100 text-amber-700 font-bold text-sm">${icon('zap','w-4 h-4 fill-amber-400')}<span id="xp-pill">0 XP</span></div><span id="learner-name" class="hidden md:block max-w-32 truncate text-sm font-semibold text-slate-600"></span><button id="logout-button" data-action="logout" class="logout-button" aria-label="Log out" title="Log out">${icon('log-out','w-4 h-4')}<span>Log out</span></button></div>
         </header>
         <main id="view-content" class="flex-1 w-full px-4 sm:px-7 lg:px-10 py-7 sm:py-9 pb-28 lg:pb-10 max-w-[1500px] mx-auto"></main>
         <footer class="app-footer">© 2026 Kassandra.dev</footer>
@@ -159,9 +159,8 @@
 
   function updateXP() { const pill=document.getElementById('xp-pill'); if(pill) pill.textContent=`${data.xp} XP`; }
   function updateProfileUI() {
-    const name=document.getElementById('learner-name'), avatar=document.getElementById('learner-avatar');
+    const name=document.getElementById('learner-name');
     if(name)name.textContent=profile?.nickname||'';
-    if(avatar){const parts=(profile?.nickname||'MG').trim().split(/\s+/);avatar.textContent=parts.length>1?`${parts[0][0]}${parts[1][0]}`:parts[0].slice(0,2);avatar.setAttribute('aria-label',`Switch learner from ${profile?.nickname||'current profile'}`);}
   }
   function renderAuth() {
     const target=document.getElementById('welcome-screen');
@@ -338,6 +337,7 @@
     if(action==='show-login'){ui.authScreen='login';render();return;}
     if(action==='show-landing'){ui.authScreen='landing';render();return;}
     if(action==='toggle-more'){ui.mobileMoreOpen=!ui.mobileMoreOpen;const menu=document.getElementById('mobile-more-menu');menu?.classList.toggle('hidden',!ui.mobileMoreOpen);event.target.closest('[data-action="toggle-more"]')?.setAttribute('aria-expanded',String(ui.mobileMoreOpen));refreshIcons();return;}
+    if(action==='logout'){clearInterval(ui.speedTimer);ui.speedTimer=null;ui.view='home';ui.lessonId=null;ui.quiz=null;ui.speed=null;ui.guess=null;ui.equationGame=null;ui.calcExpr='';ui.calcResult='';ui.authScreen='landing';ui.nicknameDraft='';ui.mobileMoreOpen=false;localStorage.removeItem(PROFILE_KEY);profile=null;render();window.scrollTo({top:0,behavior:'smooth'});return;}
     if(action==='switch-learner'){localStorage.removeItem(PROFILE_KEY);profile=null;ui.authScreen='login';ui.nicknameDraft='';render();return;}
     if(action==='back-lessons'){ui.lessonId=null;renderView();return;}
     if(action==='clear-search'){ui.lessonSearch='';ui.lessonTopic='All topics';renderView();return;}
