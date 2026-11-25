@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#4c1d95">
+  <meta name="description" content="Learn math, practice more, and become a genius with interactive lessons, quizzes, and tools.">
+  <title>Math Genius — Learn. Practice. Master.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { genius: { purple: '#4C1D95', lavender: '#EDE9FE', sky: '#E0F2FE', ink: '#1E293B' } }, fontFamily: { sans: ['Poppins', 'sans-serif'] }, boxShadow: { soft: '0 18px 50px rgba(76,29,149,.09)' } } } };
+  </script>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+  <div id="app" class="min-h-screen"></div>
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script src="https://cdn.jsdelivr.net/npm/mathjs@14.8.1/lib/browser/math.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>
